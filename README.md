@@ -1,4 +1,4 @@
-NEC_remote.X
+NEC Protocol IR Remote Decoder
 ============
 
-Decode NEC remote protocol usig XC8 compiler
+Decode NEC remote protocol commands usig XC8 compiler
