@@ -1,9 +1,19 @@
-#include <stdint.h>        /* For uint8_t definition */
-#include <stdbool.h>       /* For true/false definition */
+/*
+ * NEC Protocol IR Remote decoder
+ * Badr Ghatasheh
+ * badr.ghatasheh@gmail.com
+ * July 2013
+ */
+#include <stdint.h>
+#include <stdbool.h>
 #include <delays.h>
 #include <xc.h>
 
+// Use #define P16F877A to compile the code for PIC16F877A
 #define P16F84A
+
+// Uncomment this to enable debugging
+//#define debugging
 
 #if defined(P16F84A)
     #pragma config FOSC = HS        // Oscillator Selection bits (HS oscillator)
@@ -29,6 +39,10 @@
 #define zoom_command    0x42
 #define epg_command     0x17
 
+#if defined(debugging)
+    int debug_buffer[33]; // a placeholder for signal analysis
+#endif
+
 /*
  * Initialize ports tri state buffers, timer 0 and ADC if exists
  */
@@ -50,8 +64,11 @@ void init() {
  */
 void update_status() {
     EEPROM_WRITE(0,PORTB);
+    PORTBbits.RB7 = 1;
     __delay_ms(500L);
+    PORTBbits.RB7 = 0;
 }
+
 void main(void)
 {
     init();
@@ -64,7 +81,7 @@ void main(void)
     while(1) // infinite loop
     {
         TMR0 = 0x00; // Reset Timer
-        while (PORTAbits.RA2 == 1); // wait until sensor changes from high to low
+        while (PORTAbits.RA0 == 1); // wait until sensor changes from high to low
         time = TMR0; // get timer 0 register value
         if (time >= 67 && time <= 71) { // Start bit detected {around 4.5ms}
             start_bit = 1; // set flag
@@ -74,15 +91,20 @@ void main(void)
         if (start_bit) {
             // Logic 1 is around 1690us, around 26 timer clicks
             // Logic 0 otherwise {560us} around 8 timer clicks
-            if (index > 16 && time >= 24 && time <= 26) { // discard address bits [for the sake of simplicity
+            if (index > 16 && time >= 24 && time <= 27) { // discard address bits [for the sake of simplicity
                 // setting each bit of the command variable according to the corresponding decoded value in the stream
                 // our command starts at index 17 [1 start bit + 16 address bits = 17]
                 command = command | (1 << (index - 17));
             }
+
+            #if defined(debugging)
+                debug_buffer[index]=time;
+            #endif
+
             index++;
         }
 
-        while (PORTAbits.RA2 == 0); // wait until sensor flips
+        while (PORTAbits.RA0 == 0); // wait until sensor flips
         
         if(index == 24) // a full 8 bit command received
         {
@@ -105,6 +127,10 @@ void main(void)
             // reset values for another round
             index = 0;
             start_bit = 0;
+
+            #if defined(debugging)
+                for(int i=0; i<33 ; i++) debug_buffer[i]=0;
+            #endif
         }
     }
 }
